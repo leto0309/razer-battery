@@ -1,11 +1,14 @@
 """System tray icon that shows the battery level as a number (pure ctypes Win32)."""
 
 import ctypes
+import os
+import subprocess
+import sys
 import winreg
 from ctypes import wintypes as wt
 from typing import Callable
 
-from . import display, protocol
+from . import detach, display, protocol
 from .device import DeviceNotFound, Reading, read_connected_mouse
 
 user32 = ctypes.WinDLL("user32", use_last_error=True)
@@ -132,8 +135,7 @@ _proto(shell32.Shell_NotifyIconW, wt.BOOL, wt.DWORD, ctypes.POINTER(NOTIFYICONDA
 _proto(kernel32.GetModuleHandleW, wt.HMODULE, wt.LPCWSTR)
 _proto(kernel32.CreateMutexW, wt.HANDLE, wt.LPVOID, wt.BOOL, wt.LPCWSTR)
 _proto(kernel32.CloseHandle, wt.BOOL, wt.HANDLE)
-_proto(kernel32.GetConsoleProcessList, wt.DWORD, ctypes.POINTER(wt.DWORD), wt.DWORD)
-_proto(kernel32.FreeConsole, wt.BOOL)
+_proto(kernel32.GetConsoleWindow, wt.HWND)
 
 
 def _dib(hdc, size: int) -> tuple[int, ctypes.c_void_p]:
@@ -307,11 +309,18 @@ class TrayApp:
         return user32.DefWindowProcW(hwnd, message, wparam, lparam)
 
 
-def _hide_own_console() -> None:
-    """Close the console window that Windows opened only for this process (double-clicked exe)."""
-    processes = (wt.DWORD * 2)()
-    if kernel32.GetConsoleProcessList(processes, 2) == 1:
-        kernel32.FreeConsole()
+def _relaunch_detached() -> bool:
+    """Start a console-less copy of this tray if a console is attached; True when one was started."""
+    if not detach.should_detach(bool(kernel32.GetConsoleWindow()), os.environ):
+        return False
+    # CREATE_NO_WINDOW, not DETACHED_PROCESS: a launcher without any console would make
+    # Windows open a new, visible one for the exe's child process.
+    subprocess.Popen(detach.detached_command(sys.executable, sys.argv, getattr(sys, "frozen", False)),
+                     env=detach.detached_env(os.environ),
+                     creationflags=subprocess.CREATE_NO_WINDOW | subprocess.CREATE_NEW_PROCESS_GROUP,
+                     stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+                     close_fds=True)
+    return True
 
 
 def _set_dpi_awareness() -> None:
@@ -324,6 +333,8 @@ def _set_dpi_awareness() -> None:
 
 
 def run(interval_s: int) -> int:
+    if _relaunch_detached():
+        return 0
     ctypes.set_last_error(0)
     mutex = kernel32.CreateMutexW(None, False, MUTEX_NAME)
     if not mutex:
@@ -333,7 +344,6 @@ def run(interval_s: int) -> int:
         return 0
     try:
         _set_dpi_awareness()
-        _hide_own_console()
         return TrayApp(interval_s).run()
     finally:
         kernel32.CloseHandle(mutex)

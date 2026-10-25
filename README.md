@@ -38,7 +38,8 @@ python app.py --tray --interval 30
 ## 打包为 exe
 
 用 PowerShell 7 运行 `./scripts/package.ps1`，会先跑测试，再用 PyInstaller 生成 `dist/razer-battery.exe`。
-exe 不需要安装 Python。双击 `--tray` 快捷方式时，控制台窗口会自动关闭。
+exe 不需要安装 Python。`--tray` 会在后台以无控制台的方式重新启动自己：在终端里运行会立即返回，
+双击快捷方式也不会留下控制台窗口。
 
 ## 工作原理
 
