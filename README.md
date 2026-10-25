@@ -64,3 +64,7 @@ exe 不需要安装 Python。双击 `--tray` 快捷方式时，控制台窗口�
 PowerShell 7：`./scripts/verify.ps1` 运行测试、ruff 和自检，`./scripts/build.ps1` 构建，
 `./scripts/package.ps1` 先验证再生成 `dist/` 产物。外部环境先执行 `python -m pip install -r requirements-dev.txt`。
 测试不依赖硬件，Linux CI 也能运行；需求与验收条件见 [docs/requirements.md](docs/requirements.md)。
+
+## 许可证
+
+[MIT](LICENSE)
